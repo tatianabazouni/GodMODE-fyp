@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FloatingParticles } from "@/components/FloatingParticles";
 import { Sparkles, Heart, ArrowRight, ArrowLeft, User, Mail, Lock, Target, Eye } from "lucide-react";
-import { api } from "@/lib/api";
+import { authApi } from "@/api/authApi";
+import { goalsApi } from "@/api/goalsApi";
 import { authStore } from "@/lib/auth";
 
 const steps = [
@@ -59,11 +60,12 @@ const Register = () => {
     setError("");
     setIsSubmitting(true);
     try {
-      const payload = await api.post<{ token: string; user: { id: string; name: string; email: string } }>("/auth/register", { name, email, password });
+      const payload = await authApi.register({ name, email, password }) as { token: string; user: { id: string; name: string; email: string } };
+      localStorage.setItem("token", payload.token);
       authStore.setToken(payload.token);
       authStore.setUser(payload.user);
       if (firstGoal.trim()) {
-        await api.post("/goals", { title: firstGoal.trim(), description: "Created during onboarding", category: selectedVisions[0] || "personal" });
+        await goalsApi.create({ title: firstGoal.trim(), description: "Created during onboarding", category: selectedVisions[0] || "personal" });
       }
       setShowConfetti(true);
       setTimeout(() => navigate("/onboarding"), 1500);
