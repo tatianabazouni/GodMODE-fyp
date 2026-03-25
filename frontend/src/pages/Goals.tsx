@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -12,9 +12,10 @@ import { AnimatedCounter } from "@/components/AnimatedCounter";
 import { SkeletonCard } from "@/components/SkeletonCard";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import {
-  Plus, Calendar, CheckCircle2, Circle, Sparkles, Zap, Target,
-  Heart, Trophy, Rocket, ChevronRight, Clock, Flag, Star
+  Plus, Calendar, CheckCircle2, Circle, Sparkles, Zap,
+  Rocket, Clock, Flag
 } from "lucide-react";
+import { api } from "@/lib/api";
 
 /* ─── Types ─── */
 interface Subtask { id: string; title: string; done: boolean; }
@@ -237,6 +238,17 @@ const GoalDetailPanel = ({ goal, open, onClose, onToggleSubtask, onAddSubtask }:
 };
 
 /* ─── Main Goals Page ─── */
+const mapGoal = (goal: any): Goal => ({
+  id: goal.id || goal._id,
+  title: goal.title,
+  description: goal.description || "",
+  deadline: goal.deadline ? String(goal.deadline).slice(0, 10) : new Date(Date.now() + 90 * 86400000).toISOString().split("T")[0],
+  progress: Number(goal.progress || 0),
+  xpReward: Number(goal.xpReward || 25),
+  subtasks: (goal.subtasks || []).map((subtask: any) => ({ id: String(subtask.id), title: subtask.title, done: Boolean(subtask.done) })),
+  priority: goal.priority || "medium",
+});
+
 const Goals = () => {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -246,64 +258,51 @@ const Goals = () => {
   const [newDeadline, setNewDeadline] = useState("");
   const [newPriority, setNewPriority] = useState<"high" | "medium" | "low">("medium");
 
+  useEffect(() => {
+    const load = async () => {
+      const data = await api.get<any[]>("/goals");
+      setGoals(data.map(mapGoal));
+    };
+    void load();
+  }, []);
+
   const totalXp = goals.reduce((sum, g) => sum + (g.progress >= 100 ? g.xpReward : 0), 0);
   const completedGoals = goals.filter(g => g.progress >= 100).length;
 
-  const handleAddGoal = () => {
+  const handleAddGoal = async () => {
     if (!newTitle.trim()) return;
-    const goal: Goal = {
-      id: Date.now().toString(),
+    const created = await api.post<any>("/goals", {
       title: newTitle,
       description: newDesc,
       deadline: newDeadline || new Date(Date.now() + 90 * 86400000).toISOString().split("T")[0],
-      progress: 0,
-      xpReward: newPriority === "high" ? 50 : newPriority === "medium" ? 30 : 15,
-      subtasks: [],
       priority: newPriority,
-    };
-    setGoals((prev) => [...prev, goal]);
+      xpReward: newPriority === "high" ? 50 : newPriority === "medium" ? 30 : 15,
+    });
+    setGoals((prev) => [mapGoal(created), ...prev]);
     setNewTitle(""); setNewDesc(""); setNewDeadline(""); setNewPriority("medium");
     setShowAddDialog(false);
   };
 
-  const toggleSubtask = (goalId: string, subtaskId: string) => {
-    setGoals((prev) =>
-      prev.map((g) => {
-        if (g.id !== goalId) return g;
-        const subtasks = g.subtasks.map((s) => (s.id === subtaskId ? { ...s, done: !s.done } : s));
-        const progress = subtasks.length > 0 ? Math.round((subtasks.filter((s) => s.done).length / subtasks.length) * 100) : 0;
-        return { ...g, subtasks, progress };
-      })
-    );
-    // Update expanded goal if viewing
-    if (expandedGoal?.id === goalId) {
-      setExpandedGoal((prev) => {
-        if (!prev) return prev;
-        const subtasks = prev.subtasks.map((s) => (s.id === subtaskId ? { ...s, done: !s.done } : s));
-        const progress = subtasks.length > 0 ? Math.round((subtasks.filter((s) => s.done).length / subtasks.length) * 100) : 0;
-        return { ...prev, subtasks, progress };
-      });
-    }
+  const toggleSubtask = async (goalId: string, subtaskId: string) => {
+    const goal = goals.find((g) => g.id === goalId);
+    if (!goal) return;
+    const subtasks = goal.subtasks.map((s) => (s.id === subtaskId ? { ...s, done: !s.done } : s));
+    const progress = subtasks.length > 0 ? Math.round((subtasks.filter((s) => s.done).length / subtasks.length) * 100) : 0;
+    const updated = await api.put<any>(`/goals/${goalId}`, { subtasks, progress, completed: progress === 100 });
+    const next = mapGoal(updated);
+    setGoals((prev) => prev.map((g) => (g.id === goalId ? next : g)));
+    if (expandedGoal?.id === goalId) setExpandedGoal(next);
   };
 
-  const addSubtask = (goalId: string, title: string) => {
-    const subtask: Subtask = { id: Date.now().toString(), title, done: false };
-    setGoals((prev) =>
-      prev.map((g) => {
-        if (g.id !== goalId) return g;
-        const subtasks = [...g.subtasks, subtask];
-        const progress = Math.round((subtasks.filter((s) => s.done).length / subtasks.length) * 100);
-        return { ...g, subtasks, progress };
-      })
-    );
-    if (expandedGoal?.id === goalId) {
-      setExpandedGoal((prev) => {
-        if (!prev) return prev;
-        const subtasks = [...prev.subtasks, subtask];
-        const progress = Math.round((subtasks.filter((s) => s.done).length / subtasks.length) * 100);
-        return { ...prev, subtasks, progress };
-      });
-    }
+  const addSubtask = async (goalId: string, title: string) => {
+    const goal = goals.find((g) => g.id === goalId);
+    if (!goal) return;
+    const subtasks = [...goal.subtasks, { id: crypto.randomUUID(), title, done: false }];
+    const progress = Math.round((subtasks.filter((s) => s.done).length / subtasks.length) * 100);
+    const updated = await api.put<any>(`/goals/${goalId}`, { subtasks, progress, completed: progress === 100 });
+    const next = mapGoal(updated);
+    setGoals((prev) => prev.map((g) => (g.id === goalId ? next : g)));
+    if (expandedGoal?.id === goalId) setExpandedGoal(next);
   };
 
   return (

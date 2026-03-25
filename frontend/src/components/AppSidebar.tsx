@@ -1,13 +1,14 @@
 import { LayoutDashboard, Clock, BookOpen, Palette, Target, Users, BarChart3, User, Sparkles } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
-import { useLocation } from "react-router-dom";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarMenu,
   SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter, useSidebar,
 } from "@/components/ui/sidebar";
-import { getLevelInfo } from "@/lib/mock-data";
 import { Progress } from "@/components/ui/progress";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { authStore } from "@/lib/auth";
+import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
 
 const navItems = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
@@ -23,11 +24,20 @@ const navItems = [
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
+  const user = authStore.getUser();
+  const [xp, setXp] = useState(user?.xp || 0);
+  const [level, setLevel] = useState(user?.level || 1);
 
-  const userName = "Explorer";
-  const userAvatar = "";
-  const userXp = 0;
-  const levelInfo = getLevelInfo(userXp);
+  useEffect(() => {
+    const load = async () => {
+      const data = await api.get<{ xp: number; level: number }>("/gamification");
+      setXp(data.xp || 0);
+      setLevel(data.level || 1);
+    };
+    void load();
+  }, []);
+
+  const progress = Math.min(100, (xp % 100) || 0);
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar">
@@ -66,20 +76,19 @@ export function AppSidebar() {
         <SidebarFooter className="p-4 border-t border-sidebar-border">
           <div className="flex items-center gap-3 mb-3">
             <Avatar className="h-9 w-9 border border-sidebar-border">
-              {userAvatar && <AvatarImage src={userAvatar} />}
-              <AvatarFallback className="bg-primary/10">{userName[0]}</AvatarFallback>
+              <AvatarFallback className="bg-primary/10">{user?.name?.[0] || "E"}</AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{userName}</p>
-              <p className="text-xs text-muted-foreground">{levelInfo.current.title}</p>
+              <p className="text-sm font-medium truncate">{user?.name || "Explorer"}</p>
+              <p className="text-xs text-muted-foreground">Level {level}</p>
             </div>
           </div>
           <div className="space-y-1">
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{userXp} XP</span>
-              <span>Lvl {levelInfo.current.level}</span>
+              <span>{xp} XP</span>
+              <span>Lvl {level}</span>
             </div>
-            <Progress value={levelInfo.progress} className="h-1.5" />
+            <Progress value={progress} className="h-1.5" />
           </div>
         </SidebarFooter>
       )}
