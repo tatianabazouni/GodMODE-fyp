@@ -11,7 +11,7 @@ import {
   BarChart, Bar,
 } from "recharts";
 import { Camera, Star, Globe, Flame, Trophy, Milestone, BarChart3, Brain } from "lucide-react";
-import { api } from "@/lib/api";
+import { analyticsApi } from "@/api/analyticsApi";
 import { Link } from "react-router-dom";
 
 interface LifeStat { label: string; value: number; icon: typeof Camera; color: string; }
@@ -84,7 +84,7 @@ const Analytics = () => {
 
   useEffect(() => {
     const load = async () => {
-      const data = await api.get<any>("/analytics");
+      const data = await analyticsApi.getOverview() as any;
       setStats([
         { label: "Memories Saved", value: data.summary.memoryCount || 0, icon: Camera, color: "text-accent" },
         { label: "Dreams Achieved", value: data.summary.goalsCompleted || 0, icon: Star, color: "text-golden" },
