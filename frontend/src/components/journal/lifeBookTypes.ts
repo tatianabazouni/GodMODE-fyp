@@ -138,7 +138,7 @@ export function createLifeBook(title: string, authorName: string): LifeBook {
     return {
       ...ch,
       id: chapterId,
-      prompts: (CHAPTER_PROMPTS[ci] || []).map((q, qi) => ({
+      prompts: (Array.isArray(CHAPTER_PROMPTS[ci]) ? CHAPTER_PROMPTS[ci] : []).map((q, qi) => ({
         id: `p-${ci}-${qi}-${Date.now()}`,
         chapterId,
         question: q,

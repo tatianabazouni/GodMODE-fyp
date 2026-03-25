@@ -1,6 +1,6 @@
 const BASE_URL = "http://localhost:5000/api";
 
-const getToken = () => localStorage.getItem("lifeos-token") || localStorage.getItem("token");
+const getToken = () => localStorage.getItem("lifeos-token");
 
 async function request(path, options = {}) {
   const token = getToken();

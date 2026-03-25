@@ -79,6 +79,8 @@ const Analytics = () => {
   useEffect(() => {
     const load = async () => {
       const data = await analyticsApi.getOverview() as any;
+      const growth = Array.isArray(data?.growth) ? data.growth : [];
+      const moodTrends = Array.isArray(data?.moodTrends) ? data.moodTrends : [];
       setStats([
         { label: "Memories Saved", value: data.summary.memoryCount || 0, icon: Camera, color: "text-accent" },
         { label: "Dreams Achieved", value: data.summary.goalsCompleted || 0, icon: Star, color: "text-golden" },
@@ -86,8 +88,8 @@ const Analytics = () => {
         { label: "Challenges Done", value: data.summary.goalsCompleted || 0, icon: Flame, color: "text-amber" },
         { label: "Milestones", value: data.summary.lifeChapterCount || 0, icon: Milestone, color: "text-primary" },
       ]);
-      setLifeBalanceData((data.growth || []).map((g: any) => ({ subject: g.category, value: g.value })));
-      setMoodTrendData((data.moodTrends || []).map((m: any) => ({ month: m.date?.slice(5), happy: m.score, grateful: 0, reflective: 0, calm: 0 })));
+      setLifeBalanceData(growth.map((g: any) => ({ subject: g.category, value: g.value })));
+      setMoodTrendData(moodTrends.map((m: any) => ({ month: m.date?.slice(5), happy: m.score, grateful: 0, reflective: 0, calm: 0 })));
       setXpProgressData([{ month: "Now", xp: data.summary.xp || 0 }]);
     };
     void load();

@@ -13,7 +13,9 @@ import { dashboardApi } from "@/api/dashboardApi";
 import { journalApi } from "@/api/journalApi";
 import { goalsApi } from "@/api/goalsApi";
 import { gamificationApi } from "@/api/gamificationApi";
+import { dailyPhotoApi } from "@/api/dailyPhotoApi";
 import { authStore } from "@/lib/auth";
+import { api } from "@/lib/api";
 import {
   Star, Zap, BookOpen, Camera, Target, Trophy, Flame, Sparkles,
   Plus, Heart, PenLine, Upload, TrendingUp, ChevronRight, Calendar,
@@ -26,6 +28,7 @@ interface Quest { id: string; title: string; xp: number; completed: boolean; }
 interface Memory { id: string; title: string; date: string; }
 interface Goal { id: string; title: string; deadline: string; progress: number; xpReward: number; }
 interface BadgeType { id: string; name: string; icon: string; earned: boolean; }
+interface TimelineEvent { id: string; label: string; emoji: string; color: string; }
 
 /* ─── Animations ─── */
 const stagger = {
@@ -175,8 +178,7 @@ const EmotionalStateWidget = () => {
 };
 
 /* ─── Today's Moment ─── */
-const TodayMomentCard = () => {
-  const [photo, setPhoto] = useState<string | null>(null);
+const TodayMomentCard = ({ photo, onPhotoUpload }: { photo: string | null; onPhotoUpload: (photo: string) => void }) => {
   return (
     <motion.div variants={fadeIn}>
       <Card className="rounded-2xl border-border/30 glass-card overflow-hidden">
@@ -200,7 +202,7 @@ const TodayMomentCard = () => {
                 input.type = "file"; input.accept = "image/*";
                 input.onchange = (e) => {
                   const file = (e.target as HTMLInputElement).files?.[0];
-                  if (file) setPhoto(URL.createObjectURL(file));
+                  if (file) onPhotoUpload(URL.createObjectURL(file));
                 };
                 input.click();
               }}
@@ -216,11 +218,7 @@ const TodayMomentCard = () => {
 };
 
 /* ─── Timeline Preview ─── */
-const timelineEvents = [
-  { id: "start", label: "Your journey begins", emoji: "🌟", color: "primary" },
-];
-
-const LifeTimelinePreview = () => {
+const LifeTimelinePreview = ({ timelineEvents }: { timelineEvents: TimelineEvent[] }) => {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true });
 
@@ -315,16 +313,21 @@ const Dashboard = () => {
   const [recentMemories, setRecentMemories] = useState<Memory[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [badges, setBadges] = useState<BadgeType[]>([]);
+  const [quickEntry, setQuickEntry] = useState("");
+  const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
+  const [todayPhoto, setTodayPhoto] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [summary, gamification, goalsData, journalData] = await Promise.all([
+        const [summary, gamification, goalsData, journalData, memoriesData, photosData] = await Promise.all([
           dashboardApi.getSummary() as Promise<any>,
           gamificationApi.getSnapshot() as Promise<any>,
           goalsApi.getAll() as Promise<any[]>,
           journalApi.getAll() as Promise<any[]>,
+          api.get<any[]>("/life/memories"),
+          dailyPhotoApi.getAll() as Promise<any[]>,
         ]);
 
         const user = authStore.getUser();
@@ -333,7 +336,8 @@ const Dashboard = () => {
         setUserXp(Number(gamification?.xp ?? summary?.xp ?? 0));
         setStreakDays(Number(gamification?.streak ?? summary?.streak ?? 0));
 
-        setGoals((goalsData || []).slice(0, 5).map((g) => ({
+        const safeGoals = Array.isArray(goalsData) ? goalsData : [];
+        setGoals(safeGoals.slice(0, 5).map((g) => ({
           id: String(g.id || g._id),
           title: g.title,
           deadline: g.deadline || new Date().toISOString(),
@@ -341,29 +345,66 @@ const Dashboard = () => {
           xpReward: Number(g.xpReward || 25),
         })));
 
-        setRecentMemories((journalData || []).slice(0, 5).map((j) => ({
+        const safeJournalEntries = Array.isArray(journalData) ? journalData : [];
+        setRecentMemories(safeJournalEntries.slice(0, 5).map((j) => ({
           id: String(j._id || j.id),
           title: j.title || "Journal entry",
           date: j.createdAt || j.date,
         })));
 
-        setBadges((gamification?.badges || []).map((b: string, index: number) => ({
+        const safeBadges = Array.isArray(gamification?.badges) ? gamification.badges : [];
+        setBadges(safeBadges.map((b: string, index: number) => ({
           id: `${index}-${b}`,
           name: b,
           icon: "🏅",
           earned: true,
         })));
-        setDailyQuests((summary?.recentActivity || []).map((activity: any, index: number) => ({
+        const safeRecentActivity = Array.isArray(summary?.recentActivity) ? summary.recentActivity : [];
+        setDailyQuests(safeRecentActivity.map((activity: any, index: number) => ({
           id: String(activity.id || index),
           title: activity.title || "Activity",
           xp: activity.type === "goal" ? 25 : 10,
           completed: true,
         })));
+
+        const safeMemories = Array.isArray(memoriesData) ? memoriesData : [];
+        setTimelineEvents(safeMemories.slice(0, 6).map((memory: any) => ({
+          id: String(memory.id || memory._id),
+          label: memory.title || "Memory",
+          emoji: memory.type === "photo" ? "📸" : "📝",
+          color: "primary",
+        })));
+
+        const safePhotos = Array.isArray(photosData) ? photosData : [];
+        if (safePhotos.length > 0) {
+          setTodayPhoto(safePhotos[0].image || safePhotos[0].imageUrl || null);
+        }
       } finally {
         setIsLoading(false);
       }
     };
     void load();
+  }, []);
+
+  const handleSaveQuickEntry = useCallback(async () => {
+    if (!quickEntry.trim()) return;
+    const created = await journalApi.create({
+      title: "Quick Reflection",
+      content: quickEntry.trim(),
+      mood: "reflective",
+      tags: ["quick"],
+      date: new Date().toISOString().slice(0, 10),
+    }) as any;
+    setRecentMemories((prev) => [
+      { id: String(created._id || created.id), title: created.title || "Quick Reflection", date: created.createdAt || created.date || new Date().toISOString() },
+      ...prev,
+    ].slice(0, 5));
+    setQuickEntry("");
+  }, [quickEntry]);
+
+  const handleUploadDailyPhoto = useCallback(async (photo: string) => {
+    const created = await dailyPhotoApi.create({ imageUrl: photo }) as any;
+    setTodayPhoto(created.image || created.imageUrl || photo);
   }, []);
 
   const hasActivity = dailyQuests.length > 0 || recentMemories.length > 0 || goals.length > 0 || badges.length > 0;
@@ -409,7 +450,7 @@ const Dashboard = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <LifeProgressSphere xp={userXp} streakDays={streakDays} />
           <EmotionalStateWidget />
-          <TodayMomentCard />
+          <TodayMomentCard photo={todayPhoto} onPhotoUpload={(photo) => void handleUploadDailyPhoto(photo)} />
         </div>
 
         {!hasActivity ? (
@@ -515,9 +556,14 @@ const Dashboard = () => {
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <p className="text-muted-foreground font-handwritten text-lg">What's on your mind today?</p>
-                    <Textarea placeholder="Write a quick thought..." className="min-h-[100px] rounded-xl bg-muted/20 border-border/40" />
+                    <Textarea
+                      placeholder="Write a quick thought..."
+                      className="min-h-[100px] rounded-xl bg-muted/20 border-border/40"
+                      value={quickEntry}
+                      onChange={(event) => setQuickEntry(event.target.value)}
+                    />
                     <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                      <Button size="sm" className="gradient-primary text-primary-foreground w-full shadow-glow-primary">
+                      <Button size="sm" className="gradient-primary text-primary-foreground w-full shadow-glow-primary" onClick={() => void handleSaveQuickEntry()}>
                         <PenLine className="mr-2 h-4 w-4" /> Save Entry (+10 XP)
                       </Button>
                     </motion.div>
@@ -582,7 +628,7 @@ const Dashboard = () => {
         )}
 
         {/* Timeline Preview */}
-        <LifeTimelinePreview />
+        <LifeTimelinePreview timelineEvents={timelineEvents} />
       </motion.div>
     </div>
   );
