@@ -12,6 +12,7 @@ import {
   List,
   Plus,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import Journal3DBook from "@/components/journal/Journal3DBook";
 import ScrapbookView from "@/components/journal/ScrapbookView";
@@ -76,13 +77,14 @@ const Journal = () => {
   useEffect(() => {
     const loadEntries = async () => {
       const data = await journalApi.getAll() as any[];
-      setEntries((data || []).map((entry) => ({
+      const journalEntries = Array.isArray(data) ? data : [];
+      setEntries(journalEntries.map((entry) => ({
         id: String(entry._id || entry.id),
         date: String(entry.date || entry.createdAt || new Date().toISOString()).slice(0, 10),
         title: entry.title || "Untitled",
         content: entry.content || "",
         mood: entry.mood || "neutral",
-        tags: entry.tags || [],
+        tags: Array.isArray(entry.tags) ? entry.tags : [],
         photos: [],
         hasVoiceNote: false,
         stickers: [],
@@ -135,6 +137,12 @@ const Journal = () => {
 
   const handleDeleteLifeEntry = useCallback((id: string) => {
     setLifeEntries((prev) => prev.filter((e) => e.id !== id));
+  }, []);
+
+  const handleDeleteEntry = useCallback(async (id: string) => {
+    await journalApi.remove(id);
+    setEntries((prev) => prev.filter((entry) => entry.id !== id));
+    setExpandedEntry((current) => (current?.id === id ? null : current));
   }, []);
 
   /* ── Navigation helpers ── */
@@ -395,6 +403,15 @@ const Journal = () => {
                     ))}
                   </div>
                 )}
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => void handleDeleteEntry(expandedEntry.id)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" /> Delete Entry
+                  </Button>
+                </div>
               </div>
             </motion.div>
           )}

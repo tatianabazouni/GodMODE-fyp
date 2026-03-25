@@ -55,15 +55,17 @@ const Profile = () => {
       setUserName(profileData?.user?.name || "Explorer");
       setUserBio(profileData?.profile?.bio || "Your story begins here ✨");
       setUserXp(Number(gamification?.xp ?? dashboard?.xp ?? 0));
-      setBadges((gamification?.badges || []).map((b: string) => String(b)));
+      const safeBadges = Array.isArray(gamification?.badges) ? gamification.badges : [];
+      setBadges(safeBadges.map((b: string) => String(b)));
       setMemoryCount(Number(analytics?.summary?.memoryCount || 0));
-      setFriends(connections || []);
+      setFriends(Array.isArray(connections) ? connections : []);
 
       const completed = Number(dashboard?.goalsCompleted || 0);
       const total = Number(dashboard?.goalsTotal || 0);
       setGoalRate(total > 0 ? Math.round((completed / total) * 100) : 0);
 
-      setMilestones((dashboard?.recentActivity || []).slice(0, 6).map((item: any) => ({
+      const safeRecentActivity = Array.isArray(dashboard?.recentActivity) ? dashboard.recentActivity : [];
+      setMilestones(safeRecentActivity.slice(0, 6).map((item: any) => ({
         id: String(item.id),
         title: item.title || "Activity",
         date: new Date(item.date).toLocaleDateString(),

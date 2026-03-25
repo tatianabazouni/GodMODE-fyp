@@ -23,7 +23,6 @@ const Login = () => {
     setIsSubmitting(true);
     try {
       const payload = await authApi.login({ email, password }) as { token: string; user: { id: string; name: string; email: string } };
-      localStorage.setItem("token", payload.token);
       authStore.setToken(payload.token);
       authStore.setUser(payload.user);
       navigate("/dashboard");

@@ -16,6 +16,7 @@ import {
   Rocket, Clock, Flag
 } from "lucide-react";
 import { goalsApi } from "@/api/goalsApi";
+import { dashboardApi } from "@/api/dashboardApi";
 
 /* ─── Types ─── */
 interface Subtask { id: string; title: string; done: boolean; }
@@ -24,6 +25,7 @@ interface Goal {
   progress: number; xpReward: number; subtasks: Subtask[];
   priority: "high" | "medium" | "low";
 }
+interface ChallengeSuggestion { id: string; title: string; desc: string; xp: number; }
 
 const priorityColors = {
   high: "bg-accent/15 text-accent border-accent/30",
@@ -251,12 +253,13 @@ const mapGoal = (goal: any): Goal => ({
   deadline: goal.deadline ? String(goal.deadline).slice(0, 10) : new Date(Date.now() + 90 * 86400000).toISOString().split("T")[0],
   progress: Number(goal.progress || 0),
   xpReward: Number(goal.xpReward || 25),
-  subtasks: (goal.subtasks || []).map((subtask: any) => ({ id: String(subtask.id), title: subtask.title, done: Boolean(subtask.done) })),
+  subtasks: (Array.isArray(goal.subtasks) ? goal.subtasks : []).map((subtask: any) => ({ id: String(subtask.id), title: subtask.title, done: Boolean(subtask.done) })),
   priority: goal.priority || "medium",
 });
 
 const Goals = () => {
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [challenges, setChallenges] = useState<ChallengeSuggestion[]>([]);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [expandedGoal, setExpandedGoal] = useState<Goal | null>(null);
   const [newTitle, setNewTitle] = useState("");
@@ -266,8 +269,22 @@ const Goals = () => {
 
   useEffect(() => {
     const load = async () => {
-      const data = await goalsApi.getAll() as any[];
-      setGoals(data.map(mapGoal));
+      const [goalsData, dashboard] = await Promise.all([
+        goalsApi.getAll() as Promise<any[]>,
+        dashboardApi.getSummary() as Promise<any>,
+      ]);
+      setGoals(goalsData.map(mapGoal));
+      const suggestions = Array.isArray(dashboard?.recentActivity)
+        ? dashboard.recentActivity
+            .slice(0, 4)
+            .map((activity: any, index: number) => ({
+              id: String(activity.id || index),
+              title: activity.title || "Suggested challenge",
+              desc: activity.description || `Keep building momentum with your ${activity.type || "life"} journey.`,
+              xp: activity.type === "goal" ? 25 : 15,
+            }))
+        : [];
+      setChallenges(suggestions);
     };
     void load();
   }, []);
@@ -382,14 +399,9 @@ const Goals = () => {
                 <p className="text-xs text-muted-foreground">Fun challenges to grow</p>
               </CardHeader>
               <CardContent className="space-y-3">
-                {[
-                  { title: "Bake a cake", desc: "Try a new recipe", xp: 15 },
-                  { title: "Watch a sunrise", desc: "Witness the magic", xp: 20 },
-                  { title: "Write a poem", desc: "Express yourself", xp: 15 },
-                  { title: "Talk to a stranger", desc: "Make a connection", xp: 25 },
-                ].map((s, i) => (
+                {challenges.map((s, i) => (
                   <motion.div
-                    key={i}
+                    key={s.id}
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.3 + i * 0.1 }}
@@ -403,6 +415,9 @@ const Goals = () => {
                     <p className="text-xs text-muted-foreground">{s.desc}</p>
                   </motion.div>
                 ))}
+                {challenges.length === 0 && (
+                  <p className="text-xs text-muted-foreground">Suggestions appear as you log activity.</p>
+                )}
               </CardContent>
             </Card>
           </div>

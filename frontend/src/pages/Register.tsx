@@ -61,7 +61,6 @@ const Register = () => {
     setIsSubmitting(true);
     try {
       const payload = await authApi.register({ name, email, password }) as { token: string; user: { id: string; name: string; email: string } };
-      localStorage.setItem("token", payload.token);
       authStore.setToken(payload.token);
       authStore.setUser(payload.user);
       if (firstGoal.trim()) {
