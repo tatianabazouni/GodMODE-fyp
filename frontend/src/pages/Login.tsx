@@ -1,16 +1,37 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { FormEvent, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FloatingParticles } from "@/components/FloatingParticles";
 import { Sparkles, ArrowRight, Mail, Lock } from "lucide-react";
+import { api } from "@/lib/api";
+import { authStore } from "@/lib/auth";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const navigate = useNavigate();
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    setError("");
+    setIsSubmitting(true);
+    try {
+      const payload = await api.post<{ token: string; user: { id: string; name: string; email: string } }>("/auth/login", { email, password });
+      authStore.setToken(payload.token);
+      authStore.setUser(payload.user);
+      navigate("/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login failed");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen relative flex items-center justify-center p-4 overflow-hidden">
@@ -72,7 +93,7 @@ const Login = () => {
         >
           <h1 className="font-display text-2xl font-bold text-center text-foreground mb-6">Sign in</h1>
 
-          <div className="space-y-5">
+          <form className="space-y-5" onSubmit={handleSubmit}>
             <motion.div
               className="space-y-2"
               animate={focusedField === "email" ? { scale: 1.01 } : { scale: 1 }}
@@ -117,13 +138,13 @@ const Login = () => {
               />
             </motion.div>
 
-            <Link to="/dashboard">
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                <Button className="w-full gradient-primary text-primary-foreground rounded-xl py-5 text-base shadow-glow-primary mt-2">
-                  Continue your story <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </motion.div>
-            </Link>
+            {error && <p className="text-sm text-accent">{error}</p>}
+
+            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <Button type="submit" disabled={isSubmitting} className="w-full gradient-primary text-primary-foreground rounded-xl py-5 text-base shadow-glow-primary mt-2">
+                {isSubmitting ? "Signing in..." : "Continue your story"} <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </motion.div>
 
             <div className="relative my-4">
               <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-border/40" /></div>
@@ -140,7 +161,7 @@ const Login = () => {
                 Apple
               </Button>
             </div>
-          </div>
+          </form>
 
           <p className="text-center text-sm text-muted-foreground pt-5">
             New here?{" "}

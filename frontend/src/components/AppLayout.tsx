@@ -1,8 +1,9 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { VieAiButton } from "@/components/VieAi";
-import { Outlet, useLocation } from "react-router-dom";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { authStore } from "@/lib/auth";
 
 const pageTransition = {
   initial: { opacity: 0, y: 12 },
@@ -12,6 +13,11 @@ const pageTransition = {
 
 export function AppLayout() {
   const location = useLocation();
+  const token = authStore.getToken();
+
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
 
   return (
     <SidebarProvider>

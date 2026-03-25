@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,8 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   BarChart, Bar,
 } from "recharts";
-import { Camera, Star, Globe, Flame, Trophy, Milestone, Sparkles, Heart, BarChart3, Brain, TrendingUp } from "lucide-react";
+import { Camera, Star, Globe, Flame, Trophy, Milestone, BarChart3, Brain } from "lucide-react";
+import { api } from "@/lib/api";
 import { Link } from "react-router-dom";
 
 interface LifeStat { label: string; value: number; icon: typeof Camera; color: string; }
@@ -70,18 +71,35 @@ const AiInsightCard = ({ title, insight }: { title: string; insight: string }) =
 );
 
 const Analytics = () => {
-  const [stats] = useState<LifeStat[]>([
+  const [stats, setStats] = useState<LifeStat[]>([
     { label: "Memories Saved", value: 0, icon: Camera, color: "text-accent" },
     { label: "Dreams Achieved", value: 0, icon: Star, color: "text-golden" },
     { label: "Countries Visited", value: 0, icon: Globe, color: "text-calm" },
     { label: "Challenges Done", value: 0, icon: Flame, color: "text-amber" },
     { label: "Milestones", value: 0, icon: Milestone, color: "text-primary" },
   ]);
-  const [lifeBalanceData] = useState<BalanceDataPoint[]>([]);
-  const [moodTrendData] = useState<MoodDataPoint[]>([]);
-  const [xpProgressData] = useState<XpDataPoint[]>([]);
-  const hasData = lifeBalanceData.length > 0 || moodTrendData.length > 0 || xpProgressData.length > 0;
+  const [lifeBalanceData, setLifeBalanceData] = useState<BalanceDataPoint[]>([]);
+  const [moodTrendData, setMoodTrendData] = useState<MoodDataPoint[]>([]);
+  const [xpProgressData, setXpProgressData] = useState<XpDataPoint[]>([]);
 
+  useEffect(() => {
+    const load = async () => {
+      const data = await api.get<any>("/analytics");
+      setStats([
+        { label: "Memories Saved", value: data.summary.memoryCount || 0, icon: Camera, color: "text-accent" },
+        { label: "Dreams Achieved", value: data.summary.goalsCompleted || 0, icon: Star, color: "text-golden" },
+        { label: "Countries Visited", value: 0, icon: Globe, color: "text-calm" },
+        { label: "Challenges Done", value: data.summary.goalsCompleted || 0, icon: Flame, color: "text-amber" },
+        { label: "Milestones", value: data.summary.lifeChapterCount || 0, icon: Milestone, color: "text-primary" },
+      ]);
+      setLifeBalanceData((data.growth || []).map((g: any) => ({ subject: g.category, value: g.value })));
+      setMoodTrendData((data.moodTrends || []).map((m: any) => ({ month: m.date?.slice(5), happy: m.score, grateful: 0, reflective: 0, calm: 0 })));
+      setXpProgressData([{ month: "Now", xp: data.summary.xp || 0 }]);
+    };
+    void load();
+  }, []);
+
+  const hasData = lifeBalanceData.length > 0 || moodTrendData.length > 0 || xpProgressData.length > 0;
   return (
     <div className="max-w-6xl mx-auto space-y-6 relative">
       <div className="absolute inset-0 -z-10 overflow-hidden">

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FloatingParticles } from "@/components/FloatingParticles";
 import { Sparkles, Heart, ArrowRight, ArrowLeft, User, Mail, Lock, Target, Eye } from "lucide-react";
+import { api } from "@/lib/api";
+import { authStore } from "@/lib/auth";
 
 const steps = [
   { id: 1, title: "Create your account", subtitle: "Begin your life journey" },
@@ -38,6 +40,8 @@ const Register = () => {
   const [selectedVisions, setSelectedVisions] = useState<string[]>([]);
   const [firstGoal, setFirstGoal] = useState("");
   const [showConfetti, setShowConfetti] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
   const next = () => { setDirection(1); setStep((s) => Math.min(s + 1, 3)); };
   const prev = () => { setDirection(-1); setStep((s) => Math.max(s - 1, 1)); };
@@ -50,9 +54,24 @@ const Register = () => {
     });
   };
 
-  const handleFinish = () => {
-    setShowConfetti(true);
-    setTimeout(() => navigate("/onboarding"), 1500);
+  const handleFinish = async (event?: FormEvent) => {
+    event?.preventDefault();
+    setError("");
+    setIsSubmitting(true);
+    try {
+      const payload = await api.post<{ token: string; user: { id: string; name: string; email: string } }>("/auth/register", { name, email, password });
+      authStore.setToken(payload.token);
+      authStore.setUser(payload.user);
+      if (firstGoal.trim()) {
+        await api.post("/goals", { title: firstGoal.trim(), description: "Created during onboarding", category: selectedVisions[0] || "personal" });
+      }
+      setShowConfetti(true);
+      setTimeout(() => navigate("/onboarding"), 1500);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Registration failed");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -206,6 +225,7 @@ const Register = () => {
 
               {step === 3 && (
                 <div className="space-y-5">
+                  {error && <p className="text-sm text-accent">{error}</p>}
                   <div className="text-center mb-4">
                     <motion.div
                       initial={{ scale: 0 }}
