@@ -15,7 +15,7 @@ import {
   Plus, Calendar, CheckCircle2, Circle, Sparkles, Zap,
   Rocket, Clock, Flag
 } from "lucide-react";
-import { api } from "@/lib/api";
+import { goalsApi } from "@/api/goalsApi";
 
 /* ─── Types ─── */
 interface Subtask { id: string; title: string; done: boolean; }
@@ -146,10 +146,11 @@ const GoalCard = ({ goal, index, onToggleSubtask, onExpand }: {
 };
 
 /* ─── Goal Detail Panel ─── */
-const GoalDetailPanel = ({ goal, open, onClose, onToggleSubtask, onAddSubtask }: {
+const GoalDetailPanel = ({ goal, open, onClose, onToggleSubtask, onAddSubtask, onDeleteGoal }: {
   goal: Goal | null; open: boolean; onClose: () => void;
   onToggleSubtask: (goalId: string, subtaskId: string) => void;
   onAddSubtask: (goalId: string, title: string) => void;
+  onDeleteGoal: (goalId: string) => void;
 }) => {
   const [newSubtask, setNewSubtask] = useState("");
   if (!goal) return null;
@@ -231,6 +232,11 @@ const GoalDetailPanel = ({ goal, open, onClose, onToggleSubtask, onAddSubtask }:
               </Button>
             </div>
           </div>
+          <div className="flex justify-end">
+            <Button variant="destructive" onClick={() => onDeleteGoal(goal.id)}>
+              Delete Goal
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
@@ -260,7 +266,7 @@ const Goals = () => {
 
   useEffect(() => {
     const load = async () => {
-      const data = await api.get<any[]>("/goals");
+      const data = await goalsApi.getAll() as any[];
       setGoals(data.map(mapGoal));
     };
     void load();
@@ -271,7 +277,7 @@ const Goals = () => {
 
   const handleAddGoal = async () => {
     if (!newTitle.trim()) return;
-    const created = await api.post<any>("/goals", {
+    const created = await goalsApi.create({
       title: newTitle,
       description: newDesc,
       deadline: newDeadline || new Date(Date.now() + 90 * 86400000).toISOString().split("T")[0],
@@ -288,7 +294,7 @@ const Goals = () => {
     if (!goal) return;
     const subtasks = goal.subtasks.map((s) => (s.id === subtaskId ? { ...s, done: !s.done } : s));
     const progress = subtasks.length > 0 ? Math.round((subtasks.filter((s) => s.done).length / subtasks.length) * 100) : 0;
-    const updated = await api.put<any>(`/goals/${goalId}`, { subtasks, progress, completed: progress === 100 });
+    const updated = await goalsApi.update(goalId, { subtasks, progress, completed: progress === 100 });
     const next = mapGoal(updated);
     setGoals((prev) => prev.map((g) => (g.id === goalId ? next : g)));
     if (expandedGoal?.id === goalId) setExpandedGoal(next);
@@ -299,11 +305,18 @@ const Goals = () => {
     if (!goal) return;
     const subtasks = [...goal.subtasks, { id: crypto.randomUUID(), title, done: false }];
     const progress = Math.round((subtasks.filter((s) => s.done).length / subtasks.length) * 100);
-    const updated = await api.put<any>(`/goals/${goalId}`, { subtasks, progress, completed: progress === 100 });
+    const updated = await goalsApi.update(goalId, { subtasks, progress, completed: progress === 100 });
     const next = mapGoal(updated);
     setGoals((prev) => prev.map((g) => (g.id === goalId ? next : g)));
     if (expandedGoal?.id === goalId) setExpandedGoal(next);
   };
+
+  const handleDeleteGoal = async (goalId: string) => {
+    await goalsApi.remove(goalId);
+    setGoals((prev) => prev.filter((goal) => goal.id !== goalId));
+    if (expandedGoal?.id === goalId) setExpandedGoal(null);
+  };
+
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 relative">
@@ -449,6 +462,7 @@ const Goals = () => {
         onClose={() => setExpandedGoal(null)}
         onToggleSubtask={toggleSubtask}
         onAddSubtask={addSubtask}
+        onDeleteGoal={handleDeleteGoal}
       />
     </div>
   );

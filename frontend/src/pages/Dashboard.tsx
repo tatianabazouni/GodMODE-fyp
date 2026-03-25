@@ -10,7 +10,11 @@ import { FloatingParticles } from "@/components/FloatingParticles";
 import { AnimatedCounter } from "@/components/AnimatedCounter";
 import { SkeletonCard } from "@/components/SkeletonCard";
 import { getLevelInfo } from "@/lib/mock-data";
-import type { Quest, Memory, Goal, Badge as BadgeType } from "@/lib/mock-data";
+import { dashboardApi } from "@/api/dashboardApi";
+import { journalApi } from "@/api/journalApi";
+import { goalsApi } from "@/api/goalsApi";
+import { gamificationApi } from "@/api/gamificationApi";
+import { authStore } from "@/lib/auth";
 import {
   Star, Zap, BookOpen, Camera, Target, Trophy, Flame, Sparkles,
   Plus, Heart, PenLine, Upload, TrendingUp, ChevronRight, Calendar,
@@ -18,6 +22,11 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useRef } from "react";
+
+interface Quest { id: string; title: string; xp: number; completed: boolean; }
+interface Memory { id: string; title: string; date: string; }
+interface Goal { id: string; title: string; deadline: string; progress: number; xpReward: number; }
+interface BadgeType { id: string; name: string; icon: string; earned: boolean; }
 
 /* ─── Animations ─── */
 const stagger = {
@@ -288,21 +297,59 @@ const EmptyDashboardHero = () => (
 
 /* ─── Main Dashboard ─── */
 const Dashboard = () => {
-  const [userName] = useState("Explorer");
-  const [userXp] = useState(0);
-  const [streakDays] = useState(0);
+  const [userName, setUserName] = useState("Explorer");
+  const [userXp, setUserXp] = useState(0);
+  const [streakDays, setStreakDays] = useState(0);
   const [dailyQuests] = useState<Quest[]>([]);
-  const [recentMemories] = useState<Memory[]>([]);
-  const [goals] = useState<Goal[]>([]);
-  const [badges] = useState<BadgeType[]>([]);
+  const [recentMemories, setRecentMemories] = useState<Memory[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [badges, setBadges] = useState<BadgeType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 800);
-    return () => clearTimeout(timer);
+    const load = async () => {
+      try {
+        const [summary, gamification, goalsData, journalData] = await Promise.all([
+          dashboardApi.getSummary() as Promise<any>,
+          gamificationApi.getSnapshot() as Promise<any>,
+          goalsApi.getAll() as Promise<any[]>,
+          journalApi.getAll() as Promise<any[]>,
+        ]);
+
+        const user = authStore.getUser();
+        if (user?.name) setUserName(user.name);
+
+        setUserXp(Number(gamification?.xp ?? summary?.xp ?? 0));
+        setStreakDays(Number(gamification?.streak ?? summary?.streak ?? 0));
+
+        setGoals((goalsData || []).slice(0, 5).map((g) => ({
+          id: String(g.id || g._id),
+          title: g.title,
+          deadline: g.deadline || new Date().toISOString(),
+          progress: Number(g.progress || 0),
+          xpReward: Number(g.xpReward || 25),
+        })));
+
+        setRecentMemories((journalData || []).slice(0, 5).map((j) => ({
+          id: String(j._id || j.id),
+          title: j.title || "Journal entry",
+          date: j.createdAt || j.date,
+        })));
+
+        setBadges((gamification?.badges || []).map((b: string, index: number) => ({
+          id: `${index}-${b}`,
+          name: b,
+          icon: "🏅",
+          earned: true,
+        })));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    void load();
   }, []);
 
-  const hasActivity = dailyQuests.length > 0 || recentMemories.length > 0 || goals.length > 0;
+  const hasActivity = dailyQuests.length > 0 || recentMemories.length > 0 || goals.length > 0 || badges.length > 0;
 
   if (isLoading) {
     return (
@@ -495,6 +542,26 @@ const Dashboard = () => {
               </motion.div>
             </div>
           </>
+        )}
+
+        {recentMemories.length > 0 && (
+          <motion.div variants={fadeIn}>
+            <Card className="rounded-2xl border-border/30 glass-card">
+              <CardHeader className="pb-3">
+                <CardTitle className="font-display text-lg flex items-center gap-2">
+                  <BookOpen className="h-5 w-5 text-calm" /> Recent Journal Entries
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {recentMemories.map((entry) => (
+                  <div key={entry.id} className="p-2 rounded-lg bg-muted/20">
+                    <p className="text-sm font-medium">{entry.title}</p>
+                    <p className="text-xs text-muted-foreground">{new Date(entry.date).toLocaleDateString()}</p>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </motion.div>
         )}
 
         {/* Timeline Preview */}

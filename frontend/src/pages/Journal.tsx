@@ -25,6 +25,7 @@ import LifeStoryWriter from "@/components/journal/LifeStoryWriter";
 import LifeStoryEntryList from "@/components/journal/LifeStoryEntryList";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { journalApi } from "@/api/journalApi";
 import {
   loadLifeStoryEntries,
   saveLifeStoryEntries,
@@ -49,17 +50,6 @@ interface JournalEntry {
   stickers: string[];
 }
 
-const STORAGE_KEY = "lifeos-journal-entries";
-
-function loadEntries(): JournalEntry[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
 type View =
   | "lifestory"
   | "section"
@@ -71,7 +61,7 @@ type View =
 
 const Journal = () => {
   /* ── Legacy entries ── */
-  const [entries, setEntries] = useState<JournalEntry[]>(loadEntries);
+  const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [showEditor, setShowEditor] = useState(false);
   const [expandedEntry, setExpandedEntry] = useState<JournalEntry | null>(null);
 
@@ -83,21 +73,57 @@ const Journal = () => {
   const [activeEntryType, setActiveEntryType] = useState<EntryType>("lifebook");
   const [editingEntry, setEditingEntry] = useState<LifeStoryEntry | null>(null);
 
-  // Persist
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
-  }, [entries]);
+    const loadEntries = async () => {
+      const data = await journalApi.getAll() as any[];
+      setEntries((data || []).map((entry) => ({
+        id: String(entry._id || entry.id),
+        date: String(entry.date || entry.createdAt || new Date().toISOString()).slice(0, 10),
+        title: entry.title || "Untitled",
+        content: entry.content || "",
+        mood: entry.mood || "neutral",
+        tags: entry.tags || [],
+        photos: [],
+        hasVoiceNote: false,
+        stickers: [],
+      })));
+    };
+    void loadEntries();
+  }, []);
   useEffect(() => {
     saveLifeStoryEntries(lifeEntries);
   }, [lifeEntries]);
 
-  const handleSaveEntry = useCallback((entry: JournalEntry) => {
-    setEntries((prev) => {
-      const exists = prev.find((e) => e.id === entry.id);
-      if (exists) return prev.map((e) => (e.id === entry.id ? entry : e));
-      return [entry, ...prev];
-    });
-  }, []);
+  const handleSaveEntry = useCallback(async (entry: JournalEntry) => {
+    const existing = entries.find((e) => e.id === entry.id);
+    if (existing) {
+      const updated = await journalApi.update(entry.id, {
+        title: entry.title,
+        content: entry.content,
+        mood: entry.mood,
+        tags: entry.tags,
+        date: entry.date,
+      }) as any;
+      setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...entry, id: String(updated._id || updated.id) } : e)));
+      return;
+    }
+
+    const created = await journalApi.create({
+      title: entry.title,
+      content: entry.content,
+      mood: entry.mood,
+      tags: entry.tags,
+      date: entry.date,
+    }) as any;
+
+    const createdEntry: JournalEntry = {
+      ...entry,
+      id: String(created._id || created.id),
+      date: String(created.date || created.createdAt || entry.date).slice(0, 10),
+    };
+
+    setEntries((prev) => [createdEntry, ...prev.filter((e) => e.id !== entry.id)]);
+  }, [entries]);
 
   const handleSaveLifeEntry = useCallback((entry: LifeStoryEntry) => {
     setLifeEntries((prev) => {

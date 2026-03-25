@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FloatingParticles } from "@/components/FloatingParticles";
 import { Sparkles, ArrowRight, Mail, Lock } from "lucide-react";
-import { api } from "@/lib/api";
+import { authApi } from "@/api/authApi";
 import { authStore } from "@/lib/auth";
 
 const Login = () => {
@@ -22,7 +22,8 @@ const Login = () => {
     setError("");
     setIsSubmitting(true);
     try {
-      const payload = await api.post<{ token: string; user: { id: string; name: string; email: string } }>("/auth/login", { email, password });
+      const payload = await authApi.login({ email, password }) as { token: string; user: { id: string; name: string; email: string } };
+      localStorage.setItem("token", payload.token);
       authStore.setToken(payload.token);
       authStore.setUser(payload.user);
       navigate("/dashboard");
