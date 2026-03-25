@@ -1,4 +1,8 @@
 import { useState, useCallback, useEffect } from "react";
+import { lifeApi } from "@/api/lifeApi";
+import { journalApi } from "@/api/journalApi";
+import { goalsApi } from "@/api/goalsApi";
+import { visionApi } from "@/api/visionApi";
 
 export interface OnboardingMemory {
   id: string;
@@ -82,33 +86,56 @@ export function useOnboardingProgress() {
     }));
   }, []);
 
-  const saveMemory = useCallback((memory: OnboardingMemory) => {
+  const saveMemory = useCallback(async (memory: OnboardingMemory) => {
     setData((prev) => ({ ...prev, memory, completedSteps: [...new Set([...prev.completedSteps, "memory"])] }));
-    // Also persist to main memories store
-    const existing = JSON.parse(localStorage.getItem("lifeos-memories") || "[]");
-    existing.push(memory);
-    localStorage.setItem("lifeos-memories", JSON.stringify(existing));
+    await lifeApi.createMemory({
+      title: memory.title,
+      description: memory.description,
+      date: memory.date,
+      tags: memory.tags,
+      type: "text",
+      emotion: "nostalgia",
+    });
   }, []);
 
-  const saveJournalEntry = useCallback((entry: OnboardingJournalEntry) => {
+  const saveJournalEntry = useCallback(async (entry: OnboardingJournalEntry) => {
     setData((prev) => ({ ...prev, journalEntry: entry, completedSteps: [...new Set([...prev.completedSteps, "journal"])] }));
-    const existing = JSON.parse(localStorage.getItem("lifeos-journal") || "[]");
-    existing.push(entry);
-    localStorage.setItem("lifeos-journal", JSON.stringify(existing));
+    await journalApi.create({
+      title: entry.title,
+      content: entry.content,
+      mood: entry.mood,
+    });
   }, []);
 
-  const saveDream = useCallback((dream: OnboardingDream) => {
+  const saveDream = useCallback(async (dream: OnboardingDream) => {
     setData((prev) => ({ ...prev, dream, completedSteps: [...new Set([...prev.completedSteps, "dream"])] }));
-    const existing = JSON.parse(localStorage.getItem("lifeos-dreams") || "[]");
-    existing.push(dream);
-    localStorage.setItem("lifeos-dreams", JSON.stringify(existing));
+    const boards = await visionApi.getBoards() as any[];
+    let boardId = boards[0]?.id;
+    if (!boardId) {
+      const board = await visionApi.createBoard("My First Board") as any;
+      boardId = board.id;
+    }
+
+    await visionApi.createVisionItem({
+      boardId,
+      title: dream.title,
+      description: dream.description,
+      motivation: "Created during onboarding",
+      category: dream.category === "creativity" ? "personal" : dream.category,
+      targetYear: new Date().getFullYear() + 1,
+      tags: ["onboarding"],
+      status: "dream",
+    });
   }, []);
 
-  const saveGoal = useCallback((goal: OnboardingGoal) => {
+  const saveGoal = useCallback(async (goal: OnboardingGoal) => {
     setData((prev) => ({ ...prev, goal, completedSteps: [...new Set([...prev.completedSteps, "goal"])] }));
-    const existing = JSON.parse(localStorage.getItem("lifeos-goals") || "[]");
-    existing.push(goal);
-    localStorage.setItem("lifeos-goals", JSON.stringify(existing));
+    await goalsApi.create({
+      title: goal.title,
+      description: goal.description,
+      deadline: goal.deadline || undefined,
+      category: "Personal",
+    });
   }, []);
 
   const finishOnboarding = useCallback(() => {

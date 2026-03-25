@@ -2,8 +2,11 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
 import { AppLayout } from "@/components/AppLayout";
+import { ProtectedRoute, PublicOnlyRoute } from "@/components/ProtectedRoute";
+import { authStore } from "@/lib/auth";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -20,27 +23,49 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+const AuthEventHandler = () => {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const onUnauthorized = () => {
+      authStore.logout();
+      navigate("/login", { replace: true });
+    };
+
+    window.addEventListener("lifeos:unauthorized", onUnauthorized);
+    return () => window.removeEventListener("lifeos:unauthorized", onUnauthorized);
+  }, [navigate]);
+
+  return null;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <AuthEventHandler />
         <Routes>
           <Route path="/" element={<Index />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/onboarding" element={<Onboarding />} />
-          <Route element={<AppLayout />}>
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/life-capsule" element={<LifeCapsule />} />
-            <Route path="/journal" element={<Journal />} />
-            <Route path="/vision-board" element={<VisionBoard />} />
-            <Route path="/goals" element={<Goals />} />
-            <Route path="/connections" element={<Connections />} />
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/profile" element={<Profile />} />
+          <Route element={<PublicOnlyRoute />}>
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
           </Route>
+          <Route element={<ProtectedRoute />}>
+            <Route path="/onboarding" element={<Onboarding />} />
+            <Route element={<AppLayout />}>
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/life-capsule" element={<LifeCapsule />} />
+              <Route path="/journal" element={<Journal />} />
+              <Route path="/vision-board" element={<VisionBoard />} />
+              <Route path="/goals" element={<Goals />} />
+              <Route path="/connections" element={<Connections />} />
+              <Route path="/analytics" element={<Analytics />} />
+              <Route path="/profile" element={<Profile />} />
+            </Route>
+          </Route>
+          <Route path="/home" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

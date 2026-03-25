@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { FloatingParticles } from "@/components/FloatingParticles";
 import { Search, UserPlus, Trophy, Users } from "lucide-react";
-import { api } from "@/lib/api";
+import { connectionApi } from "@/api/connectionApi";
 
 interface Friend {
   id: string;
@@ -34,7 +34,7 @@ const Connections = () => {
   const [searchResults, setSearchResults] = useState<UserSearchResult[]>([]);
 
   const loadConnections = async () => {
-    const data = await api.get<Friend[]>("/connections");
+    const data = await connectionApi.getConnections() as Friend[];
     setFriends(data);
   };
 
@@ -48,7 +48,7 @@ const Connections = () => {
         setSearchResults([]);
         return;
       }
-      const data = await api.get<UserSearchResult[]>(`/connections/users/search?q=${encodeURIComponent(searchQuery.trim())}`);
+      const data = await connectionApi.searchUsers(searchQuery.trim()) as UserSearchResult[];
       setSearchResults(data);
     };
     const t = setTimeout(() => void lookup(), 250);
@@ -58,18 +58,18 @@ const Connections = () => {
   const acceptedFriends = useMemo(() => friends.filter((f) => f.status === "accepted"), [friends]);
 
   const sendRequest = async (userId: string) => {
-    await api.post("/connections/request", { userId });
+    await connectionApi.requestConnection(userId);
     await loadConnections();
     setSearchResults((prev) => prev.filter((u) => u.id !== userId));
   };
 
   const accept = async (connectionId: string) => {
-    await api.put("/connections/accept", { connectionId });
+    await connectionApi.acceptConnection(connectionId);
     await loadConnections();
   };
 
   const decline = async (connectionId: string) => {
-    await api.put("/connections/decline", { connectionId });
+    await connectionApi.declineConnection(connectionId);
     await loadConnections();
   };
 

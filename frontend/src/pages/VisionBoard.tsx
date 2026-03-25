@@ -51,6 +51,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { visionApi } from "@/api/visionApi";
 
 // ===== TYPES =====
 interface Subtask {
@@ -99,19 +100,6 @@ const categoryEmojis: Record<string, string> = {
 };
 
 const boardEmojiOptions = ["🌟", "🎯", "💫", "🌈", "🔥", "🌊", "🏔️", "🦋", "🌸", "⚡", "🎨", "💎"];
-
-// ===== PERSISTENCE =====
-const BOARDS_KEY = "lifeos-vision-boards";
-const DREAMS_KEY = "lifeos-dreams";
-
-function loadFromStorage<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch {
-    return fallback;
-  }
-}
 
 // ===== FLOATING DECORATIONS =====
 const FloatingParticles = () => (
@@ -815,12 +803,9 @@ const BoardTab = ({ board, isActive, onClick, onEdit, onDelete, dreamCount }: {
 
 // ===== MAIN PAGE =====
 const VisionBoard = () => {
-  const [boards, setBoards] = useState<Board[]>(() => loadFromStorage(BOARDS_KEY, []));
-  const [dreams, setDreams] = useState<Dream[]>(() => loadFromStorage(DREAMS_KEY, []));
-  const [activeBoardId, setActiveBoardId] = useState<string | null>(() => {
-    const stored = loadFromStorage<Board[]>(BOARDS_KEY, []);
-    return stored.length > 0 ? stored[0].id : null;
-  });
+  const [boards, setBoards] = useState<Board[]>([]);
+  const [dreams, setDreams] = useState<Dream[]>([]);
+  const [activeBoardId, setActiveBoardId] = useState<string | null>(null);
   const [selectedDream, setSelectedDream] = useState<Dream | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [dreamFormOpen, setDreamFormOpen] = useState(false);
@@ -835,9 +820,44 @@ const VisionBoard = () => {
   const [boardSearchQuery, setBoardSearchQuery] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  // Persist to localStorage
-  useEffect(() => { localStorage.setItem(BOARDS_KEY, JSON.stringify(boards)); }, [boards]);
-  useEffect(() => { localStorage.setItem(DREAMS_KEY, JSON.stringify(dreams)); }, [dreams]);
+  useEffect(() => {
+    const loadData = async () => {
+      const [boardData, dreamData] = await Promise.all([
+        visionApi.getBoards() as Promise<any[]>,
+        visionApi.getVisionItems() as Promise<any[]>,
+      ]);
+      const mappedBoards: Board[] = boardData.map((board, index) => ({
+        id: board.id || board._id,
+        name: board.title || "Vision Board",
+        emoji: "🌟",
+        order: Number(board.order ?? index),
+        createdAt: board.createdAt || new Date().toISOString(),
+      }));
+      const mappedDreams: Dream[] = dreamData.map((dream, index) => ({
+        id: dream.id || dream._id,
+        boardId: String(dream.boardId || dream.board),
+        title: dream.title,
+        description: dream.description || "",
+        targetYear: Number(dream.targetYear || new Date().getFullYear() + 1),
+        motivation: dream.motivation || "",
+        imageUrl: dream.imageUrl || "",
+        category: dream.category || "personal",
+        tags: Array.isArray(dream.tags) ? dream.tags : [],
+        convertedToGoal: !!dream.convertedToGoal,
+        achieved: !!dream.achieved,
+        achievedPhotoUrl: dream.achievedPhotoUrl,
+        achievedNote: dream.achievedNote,
+        subtasks: Array.isArray(dream.subtasks) ? dream.subtasks : [],
+        createdAt: dream.createdAt || new Date().toISOString(),
+        order: Number(dream.order ?? index),
+      }));
+      setBoards(mappedBoards);
+      setDreams(mappedDreams);
+      setActiveBoardId((prev) => prev || mappedBoards[0]?.id || null);
+    };
+
+    void loadData();
+  }, []);
 
   const activeBoard = boards.find((b) => b.id === activeBoardId) || null;
 
@@ -867,13 +887,14 @@ const VisionBoard = () => {
   const getDreamCountForBoard = useCallback((boardId: string) => dreams.filter((d) => d.boardId === boardId).length, [dreams]);
 
   // === Board handlers ===
-  const handleCreateBoard = (name: string, emoji: string) => {
+  const handleCreateBoard = async (name: string, emoji: string) => {
+    const created = await visionApi.createBoard(name) as any;
     const newBoard: Board = {
-      id: crypto.randomUUID(),
+      id: created.id || created._id,
       name,
       emoji,
       order: boards.length,
-      createdAt: new Date().toISOString(),
+      createdAt: created.createdAt || new Date().toISOString(),
     };
     setBoards((prev) => [...prev, newBoard]);
     setActiveBoardId(newBoard.id);
@@ -883,7 +904,8 @@ const VisionBoard = () => {
     setBoards((prev) => prev.map((b) => (b.id === id ? { ...b, name, emoji } : b)));
   };
 
-  const handleDeleteBoard = (id: string) => {
+  const handleDeleteBoard = async (id: string) => {
+    await visionApi.deleteBoard(id);
     setBoards((prev) => prev.filter((b) => b.id !== id));
     setDreams((prev) => prev.filter((d) => d.boardId !== id));
     if (activeBoardId === id) {
@@ -893,27 +915,21 @@ const VisionBoard = () => {
   };
 
   // === Dream handlers ===
-  const handleAddOrUpdateDream = (data: Omit<Dream, "id" | "convertedToGoal" | "achieved" | "subtasks" | "createdAt" | "order">) => {
+  const handleAddOrUpdateDream = async (data: Omit<Dream, "id" | "convertedToGoal" | "achieved" | "subtasks" | "createdAt" | "order">) => {
     if (editingDream) {
-      // Update existing dream
-      setDreams((prev) =>
-        prev.map((d) =>
-          d.id === editingDream.id
-            ? { ...d, ...data }
-            : d
-        )
-      );
+      await visionApi.updateVisionItem(editingDream.id, data);
+      setDreams((prev) => prev.map((d) => (d.id === editingDream.id ? { ...d, ...data } : d)));
       setEditingDream(null);
     } else {
-      // Add new dream
+      const created = await visionApi.createVisionItem(data) as any;
       const newDream: Dream = {
         ...data,
-        id: crypto.randomUUID(),
-        convertedToGoal: false,
-        achieved: false,
-        subtasks: [],
-        createdAt: new Date().toISOString(),
-        order: boardDreams.length,
+        id: created.id || created._id,
+        convertedToGoal: !!created.convertedToGoal,
+        achieved: !!created.achieved,
+        subtasks: Array.isArray(created.subtasks) ? created.subtasks : [],
+        createdAt: created.createdAt || new Date().toISOString(),
+        order: Number(created.order ?? boardDreams.length),
       };
       setDreams((prev) => [newDream, ...prev]);
     }
@@ -925,9 +941,12 @@ const VisionBoard = () => {
 
   const confirmDeleteDream = () => {
     if (deleteConfirm) {
-      setDreams((prev) => prev.filter((d) => d.id !== deleteConfirm));
-      setDeleteConfirm(null);
-      setDetailOpen(false);
+      void (async () => {
+        await visionApi.deleteVisionItem(deleteConfirm);
+        setDreams((prev) => prev.filter((d) => d.id !== deleteConfirm));
+        setDeleteConfirm(null);
+        setDetailOpen(false);
+      })();
     }
   };
 
@@ -937,6 +956,7 @@ const VisionBoard = () => {
   };
 
   const handleConvertToGoal = (id: string) => {
+    void visionApi.convertToGoal(id);
     setDreams((prev) =>
       prev.map((d) =>
         d.id === id
@@ -952,23 +972,15 @@ const VisionBoard = () => {
           : d
       )
     );
-    // Also persist to goals store
-    const dream = dreams.find((d) => d.id === id);
-    if (dream) {
-      const goals = loadFromStorage<any[]>("lifeos-goals", []);
-      goals.push({
-        id: crypto.randomUUID(),
-        title: dream.title,
-        description: dream.description,
-        deadline: `${dream.targetYear}-12-31`,
-        createdAt: new Date().toISOString(),
-      });
-      localStorage.setItem("lifeos-goals", JSON.stringify(goals));
-    }
     setDetailOpen(false);
   };
 
   const handleMarkAchieved = (id: string, photoUrl?: string, note?: string) => {
+    void visionApi.updateVisionItem(id, {
+      achieved: true,
+      achievedPhotoUrl: photoUrl,
+      achievedNote: note || "Dreams do come true ✦",
+    });
     setDreams((prev) =>
       prev.map((d) =>
         d.id === id ? { ...d, achieved: true, achievedPhotoUrl: photoUrl || d.achievedPhotoUrl, achievedNote: note || "Dreams do come true ✦" } : d
@@ -977,6 +989,7 @@ const VisionBoard = () => {
   };
 
   const handleUpdateDreamImage = (id: string, imageUrl: string) => {
+    void visionApi.updateVisionItem(id, { imageUrl });
     setDreams((prev) => prev.map((d) => (d.id === id ? { ...d, imageUrl } : d)));
     setSelectedDream((prev) => (prev && prev.id === id ? { ...prev, imageUrl } : prev));
   };
