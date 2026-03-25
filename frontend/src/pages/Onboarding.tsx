@@ -151,7 +151,7 @@ export default function Onboarding() {
             {step === 2 && (
               <StepCreateMemory
                 onComplete={(memory) => {
-                  saveMemory(memory);
+                  void saveMemory(memory);
                   celebrateThen(
                     "You preserved your first memory.",
                     "📸",
@@ -164,7 +164,7 @@ export default function Onboarding() {
             {step === 3 && (
               <StepCreateJournal
                 onComplete={(entry) => {
-                  saveJournalEntry(entry);
+                  void saveJournalEntry(entry);
                   celebrateThen(
                     "You wrote the first page of your story.",
                     "📖",
@@ -177,7 +177,7 @@ export default function Onboarding() {
             {step === 4 && (
               <StepCreateDream
                 onComplete={(dream) => {
-                  saveDream(dream);
+                  void saveDream(dream);
                   celebrateThen(
                     "You planted a seed for your future.",
                     "🌟",
@@ -190,7 +190,7 @@ export default function Onboarding() {
             {step === 5 && (
               <StepCreateGoal
                 onComplete={(goal) => {
-                  saveGoal(goal);
+                  void saveGoal(goal);
                   celebrateThen(
                     "Your first goal is set. Let's make it happen.",
                     "🎯",

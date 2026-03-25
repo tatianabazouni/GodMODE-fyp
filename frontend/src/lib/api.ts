@@ -27,6 +27,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   });
 
   const payload = await response.json().catch(() => ({}));
+  if (response.status === 401) {
+    authStore.logout();
+    window.dispatchEvent(new CustomEvent("lifeos:unauthorized"));
+  }
   if (!response.ok) {
     throw new ApiError(payload.message || "Request failed", response.status);
   }

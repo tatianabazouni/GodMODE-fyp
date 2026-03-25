@@ -1,6 +1,6 @@
 /**
  * Life Capsule — Memory management with 3D vault, gallery, and timeline views.
- * All data persisted to localStorage via useMemories hook. No mock data.
+ * Data is loaded from the Life API via useMemories hook.
  */
 import { useState, Suspense } from "react";
 import { motion, AnimatePresence } from "framer-motion";

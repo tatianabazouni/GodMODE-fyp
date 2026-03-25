@@ -17,6 +17,12 @@ async function request(path, options = {}) {
   const response = await fetch(`${BASE_URL}${path}`, { ...options, headers });
   const payload = await response.json().catch(() => ({}));
 
+  if (response.status === 401) {
+    localStorage.removeItem("lifeos-token");
+    localStorage.removeItem("lifeos-user");
+    window.dispatchEvent(new CustomEvent("lifeos:unauthorized"));
+  }
+
   if (!response.ok) {
     throw new Error(payload.message || "Request failed");
   }
