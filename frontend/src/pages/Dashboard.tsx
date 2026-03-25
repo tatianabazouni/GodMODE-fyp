@@ -9,7 +9,6 @@ import { GoalProgressRing } from "@/components/GoalProgressRing";
 import { FloatingParticles } from "@/components/FloatingParticles";
 import { AnimatedCounter } from "@/components/AnimatedCounter";
 import { SkeletonCard } from "@/components/SkeletonCard";
-import { getLevelInfo } from "@/lib/mock-data";
 import { dashboardApi } from "@/api/dashboardApi";
 import { journalApi } from "@/api/journalApi";
 import { goalsApi } from "@/api/goalsApi";
@@ -54,6 +53,18 @@ const getMotivationalSubtitle = () => {
     "Dream it. Plan it. Live it.",
   ];
   return subtitles[new Date().getDate() % subtitles.length];
+};
+
+const getLevelInfo = (xp: number) => {
+  const level = Math.max(1, Math.floor(xp / 100) + 1);
+  const currentLevelXp = (level - 1) * 100;
+  const nextLevelXp = level * 100;
+  const progress = ((xp - currentLevelXp) / Math.max(1, nextLevelXp - currentLevelXp)) * 100;
+  return {
+    current: { level, title: `Level ${level}` },
+    next: { title: `Level ${level + 1}` },
+    progress: Math.max(0, Math.min(100, progress)),
+  };
 };
 
 /* ─── Life Progress Sphere ─── */
@@ -300,7 +311,7 @@ const Dashboard = () => {
   const [userName, setUserName] = useState("Explorer");
   const [userXp, setUserXp] = useState(0);
   const [streakDays, setStreakDays] = useState(0);
-  const [dailyQuests] = useState<Quest[]>([]);
+  const [dailyQuests, setDailyQuests] = useState<Quest[]>([]);
   const [recentMemories, setRecentMemories] = useState<Memory[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [badges, setBadges] = useState<BadgeType[]>([]);
@@ -341,6 +352,12 @@ const Dashboard = () => {
           name: b,
           icon: "🏅",
           earned: true,
+        })));
+        setDailyQuests((summary?.recentActivity || []).map((activity: any, index: number) => ({
+          id: String(activity.id || index),
+          title: activity.title || "Activity",
+          xp: activity.type === "goal" ? 25 : 10,
+          completed: true,
         })));
       } finally {
         setIsLoading(false);

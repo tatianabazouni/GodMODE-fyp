@@ -71,13 +71,7 @@ const AiInsightCard = ({ title, insight }: { title: string; insight: string }) =
 );
 
 const Analytics = () => {
-  const [stats, setStats] = useState<LifeStat[]>([
-    { label: "Memories Saved", value: 0, icon: Camera, color: "text-accent" },
-    { label: "Dreams Achieved", value: 0, icon: Star, color: "text-golden" },
-    { label: "Countries Visited", value: 0, icon: Globe, color: "text-calm" },
-    { label: "Challenges Done", value: 0, icon: Flame, color: "text-amber" },
-    { label: "Milestones", value: 0, icon: Milestone, color: "text-primary" },
-  ]);
+  const [stats, setStats] = useState<LifeStat[]>([]);
   const [lifeBalanceData, setLifeBalanceData] = useState<BalanceDataPoint[]>([]);
   const [moodTrendData, setMoodTrendData] = useState<MoodDataPoint[]>([]);
   const [xpProgressData, setXpProgressData] = useState<XpDataPoint[]>([]);
